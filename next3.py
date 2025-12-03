@@ -639,7 +639,7 @@ plt.savefig("AVG_LOSS_PER_EPOCH_BOTHLATEST.png")
 #CS230 FINAL LOSS METRICS FOR DATA TABLE
 final_train_loss = avgTrain_loss_list[-1]
 final_val_loss = avgValidate_loss_list[-1]
-print(f"[RESULT] num_layers={args.num_layers}, activation={args.activation}, train_loss={final_train_loss:.4f}, final_val_loss={final_val_loss:.4f}")
+print(f"[RESULT] activation={args.activation}, train_loss={final_train_loss:.4f}, final_val_loss={final_val_loss:.4f}")
 #CS230 FINISH
 ##YB MY CODEEEEE
 plt.figure()
