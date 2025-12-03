@@ -35,6 +35,9 @@ nbins=2 ##YB how many categories adversary network tries to predict  #ADV-ED COM
 ##YB reads command-line flag --epochs or -e to set how many passes through the data to make during training
 parser = argparse.ArgumentParser(description="describe epoch numbers plot")
 parser.add_argument("--epochs", "-e", type=int, default=5, help="Number of training epochs")
+#CS230 FOR ACTIVATION CHOICES
+parser.add_argument("--activation", type=str, default="relu", choices=["relu", "leaky_relu", "tanh", "sigmoid"], help="Number of training epochs")
+#CS230 FOR ACTIVATION CHOICES
 args = parser.parse_args()
 EPOCH=args.epochs
 
@@ -64,11 +67,25 @@ def grad_reverse(x, lambda_=1.0):
 class Classifier(torch.nn.Module):
     #def __init__(self, input_dim, hidden_dim=64):
     #2 hidden layers: def __init__(self, input_dim, hidden_dim=64, hidden_dim2=64):
-    def __init__(self, input_dim, hidden_dim=64):
+
+    #CS230 ACTIVATION RELU ADDED TO PARAMETER
+    def __init__(self, input_dim, hidden_dim=64, activation="relu"):
         super().__init__()
+        activation_name = activation.lower()
+        if activation_name == "relu":
+            activation_layer= torch.nn.ReLU()
+        elif activation_name == "leaky_relu":
+            activation_layer= torch.nn.LeakyReLU(negative_slope=0.01)  #negative_slope?
+        elif activation_name == "tanh":
+            activation_layer= torch.nn.Tanh()
+        elif activation_name == "sigmoid":
+            activation_layer= torch.nn.Sigmoid()
+        else:
+            raise ValueError("unknown activation: {activation}")
+            
         self.net = torch.nn.Sequential(
             torch.nn.Linear(input_dim, hidden_dim),
-            torch.nn.ReLU(),
+            activation_layer,
             #2 hidden layers: torch.nn.Linear(hidden_dim, hidden_dim2), #TO CHANGEEEEE
             #2 hidden layers: torch.nn.Linear(hidden_dim2, 1)  # 1-class output
             torch.nn.Linear(hidden_dim, 1)  # 1-class output
@@ -275,7 +292,9 @@ test_loader = DataLoader(test_dataset, batch_size=128, drop_last=True)
 ## YB Chooses loss functions: Binary cross-entropy with logits for the classifier (signal vs background)
 ## YB                     and Cross-entropy for the adversary (multi-class psum bin classification), 
 ## YB assigns a mixing weight = 50 to control how strongly the adversary affects training. 
-classifier = Classifier(input_dim=X.shape[1])
+
+#CS230 ADDED HIDDEN_DIM AND ACTIVATION= ARGUMENTS
+classifier = Classifier(input_dim=X.shape[1], hidden_dim=64, activation=args.activation) 
 ##YB TO DO: Change the number of dimensions
 #changed from 1 to 5
 adversary = Adversary(input_dim=64)  # match classifier output logits
@@ -402,7 +421,7 @@ with torch.no_grad():
 #      criterion_clf(classifier(xb), yb.float()).item()
             criterion_clf(logits, yb.float()).item()    
         )
-
+"""" CS230 COMMENT OUT TO MAKE CLEANER
 # (3) Plot epoch 0 per‑batch train & val losses  ← ADDED
 plt.figure()
 plt.plot(train_batch_losses0, label='Train (epoch 0)')
@@ -414,7 +433,7 @@ plt.legend()
 plt.tight_layout()
 plt.savefig("epoch0_train_val_loss_per_batch.png")
 plt.close()
-
+"""
 # store epoch 0 losses
 train_loss_list.append(pre_train_sum)
 avgTrain_loss_list.append(pre_train_avg)
@@ -574,6 +593,7 @@ for epoch in range(1, EPOCH+1):
                # val_batch_losses1.append(loss1.item())
     classifier.train()                                                    # <<< ADDED
     avgValidate_loss_list.append(validate_loss_sum/num_val_batches)       # <<< ADDED  it was added where "was added" written            
+"""" CS230 COMMENT OUT
 #"was added"
     # — plot epoch 1 per batch train & val losses —  <<< ADDED
 plt.figure()                                                         # <<< ADDED
@@ -598,8 +618,6 @@ plt.legend()                                                         # <<< ADDED
 plt.tight_layout()                                                   # <<< ADDED
 plt.savefig("epoch2_train_val_loss_per_batch.png")                    # <<< ADDED
 plt.close()   
-"""????
-"""
     
 plt.figure()
 plt.plot(range(0, EPOCH+1), train_loss_list, marker='o')
@@ -607,7 +625,7 @@ plt.xlabel("Epoch")
 plt.ylabel("loss_clf Sum")
 plt.title("Training loss/Epoch")
 plt.savefig("SUM_EPOCH_LOSS PER EPOCH.png")
-
+CS230 COMMENTED OUT"""
 
 plt.figure()
 plt.plot(range(0, EPOCH+1), avgTrain_loss_list, marker='o', label='Average Training loss')
@@ -618,6 +636,11 @@ plt.title("Average Training and Validation loss/Epoch")
 plt.legend()
 plt.savefig("AVG_LOSS_PER_EPOCH_BOTHLATEST.png")
 
+#CS230 FINAL LOSS METRICS FOR DATA TABLE
+final_train_loss = avgTrain_loss_list[-1]
+final_val_loss = avgValidate_loss_list[-1]
+print(f"[RESULT] num_layers={args.num_layers}, activation={args.activation}, train_loss={final_train_loss:.4f}, final_val_loss={final_val_loss:.4f}")
+#CS230 FINISH
 ##YB MY CODEEEEE
 plt.figure()
 for stage, label_text in [('epoch0_pretrain','Epoch 0 (pre-train)'),
@@ -657,7 +680,7 @@ with torch.no_grad():
 
         y_true_region.extend(y_region.numpy())
         y_pred_region_logits.extend(logits_region.numpy())  # shape: (B, n_bins)
-
+""" CS230 COMMENTED OUT 
 #####This section of code plots the adversarial ROC curves; I will refer to it as adversarry#############
 unique, counts = np.unique(y_true_signal, return_counts=True)
 print(dict(zip(unique, counts)))
@@ -669,6 +692,11 @@ n_bins = y_pred_region_logits.shape[1]
 unique, counts = np.unique(y_true_region, return_counts=True)
 print(dict(zip(unique, counts)))
 
+#CS230 NEW ADDITION for test AUC
+y_true_signal = np.array(y_true_signal)
+y_pred_signal = np.array(y_pred_signal)
+#CS230
+
 # Binarize true labels for one-vs-rest
 ## YB measures how well each adversial bin classifer can tell "this event is in bin i vs. not bin i."
 ## YB saves a 5-line ROC plot, one for each bin
@@ -676,12 +704,16 @@ y_true_bin = label_binarize(y_true_region, classes=list(range(n_bins)))
 
 for i in range(n_bins):
     fpr, tpr, _ = roc_curve(y_true_bin[:, i], y_pred_region_logits[:, i])
+    fpr_test, tpr_test, _ = roc_curve(y_true_signal, y_pred_signal)
+    test_auc = auc(fpr_test, tpr_test)
+    print(f"[RESULT] num_layers={args.num_layers}, activation={args.activation}, test_AUC={test_auc:.4f}")
     
     try:
         roc_auc = auc(fpr, tpr)
         plt.plot(fpr, tpr, label=f"Class {i} (AUC = {roc_auc:.2f})")
     except:
         print(f"Class {i} has insufficient samples for AUC")
+
 plt.plot([0, 1], [0, 1], linestyle='--', color='gray')
 plt.xlabel("FPR")
 plt.ylabel("TPR")
@@ -690,7 +722,7 @@ plt.legend()
 plt.grid(True)
 plt.tight_layout()
 plt.savefig("Adversary_ROC_MulticlassTestNoMassDiscrFarZ.png")
-
+CS230 COMMENTED OUT FOR CLEAN"""
 ##YB MY CODEEE
 for idx, name in enumerate(flattened_names):
     print(idx, name)
@@ -786,13 +818,13 @@ for idx, name in enumerate(flattened_names):
   ax_te.set_title(f'Test: {name}')
   ax_te.set_xlabel(name)
   ax_te.legend()
-
+""" CS230 COMMENTED OUT 
   fig.suptitle(f'Distribution of {name}', fontsize=15)
   fig.tight_layout()
   safe_name = name.replace('.', '_').replace('[', '_').replace(']', '')
   fig.savefig(f"Z(TO KEEP IT IN ONE PLACE): {safe_name}.png")
   plt.close()
-
+CS230 COMMENTED OUT """
 ## YB MY CODEEEEE ^^^^
 ############THIS PLOTS THE ROC CURVE################
 def plot_roc(y_true, y_score, title):
