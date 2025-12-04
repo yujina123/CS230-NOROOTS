@@ -35,7 +35,7 @@ nbins=2 ##YB how many categories adversary network tries to predict  #ADV-ED COM
 ##YB reads command-line flag --epochs or -e to set how many passes through the data to make during training
 parser = argparse.ArgumentParser(description="describe epoch numbers plot")
 parser.add_argument("--epochs", "-e", type=int, default=5, help="Number of training epochs")
-parser.add_argument("--hidden_dims", nargs="*", help="Hidden layers dimensions", type=int)
+parser.add_argument("--hidden_dims", nargs="+", help="Hidden layers dimensions", type=int)
 parser.add_argument("--dropout", help="dropout", type=float, default=0.0)
 args = parser.parse_args()
 EPOCH=args.epochs
@@ -74,7 +74,7 @@ class Classifier(torch.nn.Module):
         prev_dim = input_dim
         for hidden_dim_idx, hidden_dim in enumerate(hidden_dims):
             if dropout and hidden_dim_idx > 0:
-                layers.append(torch.nn.Dropout(dropout=dropout))
+                layers.append(torch.nn.Dropout(p=dropout))
             layers += [
                 torch.nn.Linear(prev_dim, hidden_dim),
                 torch.nn.ReLU()
@@ -103,7 +103,7 @@ class Classifier(torch.nn.Module):
         #print('[DIAG] Hidden pre-ReLU shape:', hidden_pre_relu.shape)
         #print('[DIAG] Hidden post-ReLU shape:', hidden_post_relu.shape)
         coding = hidden_post_relu
-        out = self.net[2](coding).squeeze(-1)             # classifier output
+        out = self.net(x).squeeze(-1)             # classifier output
        #TRY THIS?
         """ if torch.isnan(coding).any():
             print("⚠️ NaNs detected in coding!")
@@ -289,7 +289,7 @@ test_loader = DataLoader(test_dataset, batch_size=128, drop_last=True)
 classifier = Classifier(input_dim=X.shape[1], hidden_dims=args.hidden_dims, dropout=args.dropout)
 ##YB TO DO: Change the number of dimensions
 #changed from 1 to 5
-adversary = Adversary(input_dim=64)  # match classifier output logits
+adversary = Adversary(input_dim=args.hidden_dims[0])  # match classifier output logits
 
 ###########THESE ARE THEIR PARAMETERS
 opt_clf = torch.optim.Adam(classifier.parameters(), lr=1e-3)
