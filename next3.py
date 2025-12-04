@@ -737,7 +737,8 @@ for idx, name in enumerate(flattened_names):
 
     # 2) pick bin edges (50 bins here; change if you want)
     edges = np.linspace(all_vals.min(), all_vals.max(), 51)
-
+     
+    """ CS230 COMMENTED OUT
     # 3) print stats
     print(f"\n==== {name} ====")
     print_bin_stats(train_vals[0], edges, "train_sig")
@@ -745,6 +746,7 @@ for idx, name in enumerate(flattened_names):
     print_bin_stats(test_vals[0],  edges, "test_sig")
     print_bin_stats(test_vals[1],  edges, "test_bkg")
 
+    CS230 COMMENTED OUT"""
 pz_col = 12
 
 signal_mask_train = (Y_train == 1)
@@ -802,6 +804,7 @@ for idx, name in enumerate(flattened_names):
   train_vals = X_train[Y_train == 1, idx], X_train[Y_train == 0, idx] #mask and then idx means column for feature element (matrix composition: rows - event # (?), columns - feature/types like ele.pos, ele.pz)
   test_vals = X_test[Y_test == 1, idx], X_test[Y_test == 0, idx]
   #figure with two subplots
+  """CS230 COMMENTED OUT 
   fig, (ax_tr, ax_te) = plt.subplots(1, 2, figsize=(10,4), sharey=True)
 
   #train-set histograms
@@ -818,7 +821,7 @@ for idx, name in enumerate(flattened_names):
   ax_te.set_title(f'Test: {name}')
   ax_te.set_xlabel(name)
   ax_te.legend()
-""" CS230 COMMENTED OUT 
+CS230 COMMENTED OUT 
   fig.suptitle(f'Distribution of {name}', fontsize=15)
   fig.tight_layout()
   safe_name = name.replace('.', '_').replace('[', '_').replace(']', '')
