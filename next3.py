@@ -36,7 +36,8 @@ nbins=2 ##YB how many categories adversary network tries to predict  #ADV-ED COM
 parser = argparse.ArgumentParser(description="describe epoch numbers plot")
 parser.add_argument("--epochs", "-e", type=int, default=5, help="Number of training epochs")
 #CS230 FOR ACTIVATION CHOICES
-parser.add_argument("--activation", type=str, default="relu", choices=["relu", "leaky_relu", "tanh", "sigmoid"], help="Number of training epochs")
+parser.add_argument("--activation", type=str, default="relu", choices=["relu", "leaky_relu", "tanh", "sigmoid"], help="Activation function")
+parser.add_argument("--num_layers", type=int, default=1, choices=[1, 2, 5, 8], help="Number of hidden layers")
 #CS230 FOR ACTIVATION CHOICES
 args = parser.parse_args()
 EPOCH=args.epochs
@@ -69,8 +70,11 @@ class Classifier(torch.nn.Module):
     #2 hidden layers: def __init__(self, input_dim, hidden_dim=64, hidden_dim2=64):
 
     #CS230 ACTIVATION RELU ADDED TO PARAMETER
-    def __init__(self, input_dim, hidden_dim=64, activation="relu"):
+    def __init__(self, input_dim, hidden_dim=64, num_layers=1, activation="relu"):
         super().__init__()
+        #CS230
+        self.num_layers = num_layers
+        #CS230
         activation_name = activation.lower()
         if activation_name == "relu":
             activation_layer= torch.nn.ReLU()
@@ -82,16 +86,94 @@ class Classifier(torch.nn.Module):
             activation_layer= torch.nn.Sigmoid()
         else:
             raise ValueError("unknown activation: {activation}")
-            
-        self.net = torch.nn.Sequential(
+        
+        if num_layers == 1:
+            self.net = torch.nn.Sequential(
             torch.nn.Linear(input_dim, hidden_dim),
             activation_layer,
-            #2 hidden layers: torch.nn.Linear(hidden_dim, hidden_dim2), #TO CHANGEEEEE
-            #2 hidden layers: torch.nn.Linear(hidden_dim2, 1)  # 1-class output
             torch.nn.Linear(hidden_dim, 1)  # 1-class output
         )
+            
+        elif num_layers == 2:
+            self.net = torch.nn.Sequential(
+            torch.nn.Linear(input_dim, hidden_dim),
+            activation_layer,
+            torch.nn.Linear(hidden_dim, hidden_dim),
+            activation_layer,
+            torch.nn.Linear(hidden_dim, 1)  
+            )
+
+        elif num_layers == 5:
+            self.net = torch.nn.Sequential(
+            torch.nn.Linear(input_dim, hidden_dim),
+            activation_layer,
+            torch.nn.Linear(hidden_dim, hidden_dim),
+            activation_layer,
+            torch.nn.Linear(hidden_dim, hidden_dim),
+            activation_layer,
+            torch.nn.Linear(hidden_dim, hidden_dim),
+            activation_layer,
+            torch.nn.Linear(hidden_dim, hidden_dim),
+            activation_layer,
+            torch.nn.Linear(hidden_dim, 1)  
+            )
+
+        elif num_layers == 8:
+            self.net = torch.nn.Sequential(
+            torch.nn.Linear(input_dim, hidden_dim),
+            activation_layer,
+            torch.nn.Linear(hidden_dim, hidden_dim),
+            activation_layer,
+            torch.nn.Linear(hidden_dim, hidden_dim),
+            activation_layer,
+            torch.nn.Linear(hidden_dim, hidden_dim),
+            activation_layer,
+            torch.nn.Linear(hidden_dim, hidden_dim),
+            activation_layer,
+            torch.nn.Linear(hidden_dim, hidden_dim),
+            activation_layer,
+            torch.nn.Linear(hidden_dim, hidden_dim),
+            activation_layer,
+            torch.nn.Linear(hidden_dim, hidden_dim),
+            activation_layer,
+            torch.nn.Linear(hidden_dim, 1)  
+            )
+        else:
+            raise ValueError("unknown num_layers: {num_layers}")
 
     def forward(self, x):
+        if self.num_layers == 1:
+            h1 = self.net[1](self.net[0](x))     # after first activation
+            coding = h1
+            out = self.net[2](coding).squeeze(-1)
+
+        elif self.num_layers == 2:
+            h1 = self.net[1](self.net[0](x))
+            h2 = self.net[3](self.net[2](h1))
+            coding = h2
+            out = self.net[4](coding).squeeze(-1)
+
+        elif self.num_layers == 5:
+            h1 = self.net[1](self.net[0](x))
+            h2 = self.net[3](self.net[2](h1))
+            h3 = self.net[5](self.net[4](h2))
+            h4 = self.net[7](self.net[6](h3))
+            h5 = self.net[9](self.net[8](h4))
+            coding = h5
+            out = self.net[10](coding).squeeze(-1)
+
+        elif self.num_layers == 8:
+            h1 = self.net[1](self.net[0](x))
+            h2 = self.net[3](self.net[2](h1))
+            h3 = self.net[5](self.net[4](h2))
+            h4 = self.net[7](self.net[6](h3))
+            h5 = self.net[9](self.net[8](h4))
+            h6 = self.net[11](self.net[10](h5))
+            h7 = self.net[13](self.net[12](h6))
+            h8 = self.net[15](self.net[14](h7))
+            coding = h8
+            out = self.net[16](coding).squeeze(-1)
+
         #ADV-ED COMMENTED OUT
         #NEW EDITION BELOW
         """
@@ -99,6 +181,7 @@ class Classifier(torch.nn.Module):
         out = self.classifier_head(features).squeeze(-1)
         return out, features                         # return both
          """
+        """ CS230 COMMENTED OUT
         coding = self.net[1](self.net[0](x))              # hidden layer output
         hidden_pre_relu = self.net[0](x)
         if torch.isnan(hidden_pre_relu).any() or torch.isinf(hidden_pre_relu).any():
@@ -106,10 +189,14 @@ class Classifier(torch.nn.Module):
         hidden_post_relu = self.net[1](hidden_pre_relu)
         if torch.isnan(hidden_post_relu).any() or torch.isinf(hidden_post_relu).any():
             print('[DIAG] NaNs or Infs after ReLU')
+
+        CS230 COMMENTED OUT """
         #print('[DIAG] Hidden pre-ReLU shape:', hidden_pre_relu.shape)
         #print('[DIAG] Hidden post-ReLU shape:', hidden_post_relu.shape)
+        """
         coding = hidden_post_relu
         out = self.net[2](coding).squeeze(-1)             # classifier output
+       CS230 COMMENTED OUT """
        #TRY THIS?
         """ if torch.isnan(coding).any():
             print("⚠️ NaNs detected in coding!")
@@ -294,7 +381,7 @@ test_loader = DataLoader(test_dataset, batch_size=128, drop_last=True)
 ## YB assigns a mixing weight = 50 to control how strongly the adversary affects training. 
 
 #CS230 ADDED HIDDEN_DIM AND ACTIVATION= ARGUMENTS
-classifier = Classifier(input_dim=X.shape[1], hidden_dim=64, activation=args.activation) 
+classifier = Classifier(input_dim=X.shape[1], hidden_dim=64, num_layers=args.num_layers, activation=args.activation) 
 ##YB TO DO: Change the number of dimensions
 #changed from 1 to 5
 adversary = Adversary(input_dim=64)  # match classifier output logits
