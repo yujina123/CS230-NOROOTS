@@ -212,16 +212,6 @@ for filename, label in files_and_labels:
             #print(f"Array {i} shape: {part.shape}")
 
         data = np.hstack(data_parts)
-        """n_new = data.shape[0] # NEW ADDED YB!!! to quit after 10k events count how many events this chunk adds
-        print(n_new)
-         # if adding these would exceed 10k, stop and move on
-        if event_count + n_new > MAX_EVENTS_PER_FILE:
-            print(f"Reached {event_count} + {n_new} > {MAX_EVENTS_PER_FILE} in {filename}, skipping the rest")
-            break
-
-        # otherwise accept them
-        event_count += n_new
-        """
         labels = np.full(data.shape[0], label)
 
         ############THIS STORES THE DATA INTO all_data ALONGSIDE labels TO TELL YOU SIGNAL OR BACKGROUND AND cut_labels FOR WHAT ADVERSARY REGION YOU'RE IN
@@ -253,8 +243,6 @@ Z = np.concatenate(cut_labels)
 print('X:', X.shape, 'Y:', Y.shape, 'Z:', Z.shape   )
 
 # Create a composite label for stratification; this line will keep the relative ratios of signal and background as well as control and not control constant.
-
-#composite_labels = Y.astype(str) + "_" + Z.astype(str)
 
 composite_labels = np.array([f"{y}_{z}" for y, z in zip(Y, Z)])
 ####################THIS ESTABLISHED THE TRAIN AND TESTING SET, BY SETTING ASIDE RANDOM EVENTS AT A RATE OF 1/3 FOR TRAINING, IT KEEPS Y (THE AMOUNT OF SIGNAL) PROPORTIONAL IN EACH SET###############
@@ -289,7 +277,6 @@ test_loader = DataLoader(test_dataset, batch_size=128, drop_last=True)
 ##                     and Cross-entropy for the adversary (multi-class psum bin classification),
 ## assigns a mixing weight = 50 to control how strongly the adversary affects training.
 classifier = Classifier(input_dim=X.shape[1], hidden_dims=args.hidden_dims, dropout=args.dropout, activation=args.activation)
-##TO DO: Change the number of dimensions
 #changed from 1 to 5
 adversary = Adversary(input_dim=X.shape[1] if len(args.hidden_dims) == 0 else args.hidden_dims[-1])  # match classifier output logits
 
@@ -360,82 +347,16 @@ def take_roc_snapshot(stage_name, data_loader):
 ##prepare lists to record loss values over epochs
 train_loss_list = [] #total training loss per epoch
 validate_loss_list = []
-# avgTrain_loss_list = [] #average training loss per epoch
-# avgValidate_loss_list = [] #average validation loss per epoch
 
-## EPOCH 0 baseline (no training/no weight updates)
 classifier.eval() #evaluation mode - no weight changes
 
-# training data baseline loss
-# pre_train_sum = 0.0; pre_train_batches = 0
-# with torch.no_grad():
-#     for xb, yb, _ in train_loader:
-#         logits, coding = classifier(xb)
-#         # criterian_clf is a function measuring "binary cross-entropy"
-#         # it returns a small tensor representing how far off the prediction is
-#         loss   = criterion_clf(logits, yb.float())
-#         pre_train_sum     += loss.item() #accumulate each batch
-#         pre_train_batches += 1 #count batches
-# pre_train_avg = pre_train_sum / pre_train_batches
-
-# validation data baseline loss
-# pre_val_sum = 0.0; pre_val_batches = 0
-# with torch.no_grad():
-#     for xb, yb, _ in test_loader:
-#         logits, coding = classifier(xb)
-#         loss   = criterion_clf(logits, yb.float())
-#         pre_val_sum     += loss.item()
-#         pre_val_batches += 1
-# pre_val_avg = pre_val_sum / pre_val_batches
-
-#DEBUGGG REMOVE LATER
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 classifier.to(device)
 adversary.to(device)
 
 # resume training mode so weights updates
 classifier.train()
-#to debug
 adversary.train()
-##FOR VALIDATION LOSS:
-# (2) Collect per‑batch losses at epoch 0  ← ADDED
-# train_batch_losses0 = []
-# with torch.no_grad():
-#     for xb, yb, _ in train_loader:
-#         logits, coding = classifier(xb)
-#         train_batch_losses0.append(
-#             criterion_clf(logits, yb.float()).item()
-#         )
-
-# val_batch_losses0 = []
-# with torch.no_grad():
-#     for xb, yb, _ in test_loader:
-#         logits, coding = classifier(xb)
-#         val_batch_losses0.append(
-#             #ADV-ED COMMENTED OUT
-# #      criterion_clf(classifier(xb), yb.float()).item()
-#             criterion_clf(logits, yb.float()).item()
-#         )
-
-# (3) Plot epoch 0 per‑batch train & val losses  ← ADDED
-# plt.figure()
-# plt.plot(train_batch_losses0, label='Train (epoch 0)')
-# plt.plot(val_batch_losses0,   label='Val   (epoch 0)')
-# plt.xlabel("Batch index")
-# plt.ylabel("Loss")
-# plt.title("Epoch 0: Batch training & validation loss")
-# plt.legend()
-# plt.tight_layout()
-# plt.savefig("epoch0_train_val_loss_per_batch.png")
-# plt.close()
-
-# store epoch 0 losses
-# train_loss_list.append(pre_train_sum)
-# avgTrain_loss_list.append(pre_train_avg)
-# avgValidate_loss_list.append(pre_val_avg)
-
-# take ROC snapshot at epoch 0 (before any training)
-# take_roc_snapshot('epoch0_pretrain')
 
 def calc_classifier_loss(data_loader):
     classifier.eval()
@@ -455,33 +376,13 @@ for epoch in range(1, EPOCH+1):
     #--------TRAINING & VALIDATION PASS ----------#
     epoch_loss_sum = num_batches = 0
     validate_loss_sum = num_val_batches = 0
-    # validate_loss1_sum = num_val1_batches = 0
-    # validate_loss2_sum = num_val2_batches = 0
-    #NEWW FOR 10K EVENTS
     samples_seen = 0
-    ##grecord individual batch losses on epoch 1
-    # if epoch == 1:
-    #     train_batch_losses1 = []
-    #     val_batch_losses1 = []                                               # <<< ADDED
-    # if epoch == 2:
-    #     train_batch_losses2 = []
-    #     val_batch_losses2 = []                                               # <<< ADDED
-    #num_train_batches_total = len(train_loader)
-    #halfway_batch_index = num_train_batches_total // 2
-
-
-    ##MY CODE
+    
     #make a counter until 10 k and exit
     for x, y, ycut in train_loader:  #have to do enumerate for mid roc skipped
-        #TO DEBUG THE SIZE MISMATCH
-        #print(f"[DEBUG] Batch x shape: {x.shape}")
-        #for i in range(x.shape[0]):
-        #    print(f"  Row {i} shape: {x[i].shape}")
-
         x, y, ycut = x.to(device), y.to(device), ycut.to(device)
             # Optional: Check for NaNs/Infs
 
-        #YB!!! FOR 10K EVENT @@@
         batch_size = x.size(0)
         # if taking this batch would exceed 10k, stop training for this epoch
         if samples_seen + batch_size > MAX_EVENTS_PER_FILE:
@@ -501,68 +402,22 @@ for epoch in range(1, EPOCH+1):
             print("Coding (sample):", coding[:5])
             # assert coding.shape[0] == x.shape[0], "Mismatch in batch size between x and coding"
             continue
-        #CHECK OF NaN for batch size?
-        """if torch.any(torch.isnan(x)) or torch.any(torch.isinf(x)):
-            print("Input x contains NaNs or Infs! Skipping this batch.")
-            continue
-        """
+        
         if coding.shape[0] != x.shape[0]:
             print("⚠️ Skipping batch: mismatch between input and output")
             continue
         # Step 2: classification loss
         loss_clf = criterion_clf(logits, y.float())
 
-        # MY CODEEE: recod if in first epoch
-        # if epoch == 1:
-        #     train_batch_losses1.append(loss_clf.item())
-        #Test loader for loop happens, maybe you sum
-            # classifier.eval()
-            # with torch.no_grad():
-            #     for xb, yb, _ in test_loader:
-            #         logits, coding = classifier(xb)                                   # <<< ADDED
-            #         loss1 = criterion_clf(logits, yb.float())             # <<< ADDED
-            #         validate_loss1_sum += loss1.item()                             # <<< ADDED THIS validate_loss_sum if for when epoch is 1
-            #         num_val1_batches  += 1                                        # <<< ADDED
-            # val_batch_losses1.append(validate_loss1_sum/num_val1_batches)  #validate_loss1_sum is each batch and so graphing it per batch
-            # classifier.train()
-
-        # if epoch == 2:
-        #     train_batch_losses2.append(loss_clf.item())
-        # #Test loader for loop happens, maybe you sum
-        #     classifier.eval()
-        #     with torch.no_grad():
-        #         for xb, yb, _ in test_loader:
-        #             logits, coding = classifier(xb)                              # <<< ADDED
-        #             loss2 = criterion_clf(logits, yb.float())             # <<< ADDED
-        #             validate_loss2_sum += loss2.item()                             # <<< ADDED THIS validate_loss_sum if for when epoch is 1
-        #             num_val2_batches  += 1                                        # <<< ADDED
-        #     val_batch_losses2.append(validate_loss2_sum/num_val2_batches)  #validate_loss1_sum is each batch and so graphing it per batch
-        #     classifier.train()
-        #val_batch_losses1.append(averageovertestloader)
-        ##accumulate for epoch summary
         epoch_loss_sum += loss_clf.item()
         num_batches += 1
         samples_seen += batch_size
-        ## MY CODEEE
 
         # Step 3: adversarial prediction (on logits or softmax)
-        adv_input = coding.detach() #ADV-ED COMMENTED OUT adv_input = logits.detach().unsqueeze(1)  # optionally softmax(logits) if more stable
+        adv_input = coding.detach()
         dz_logits = adversary(adv_input, lambda_=lambda_adv) #feeds that single node to adversary - classifier output
-        #^^change to all the nodes plus the current node to classifier output
-        #DEBUGGING
-        #print("dz_logits.shape:", dz_logits.shape)
-        #print("ycut.shape:", ycut.shape)
+        
 
-#DEBUGGING
-        #print(f"x.shape = {x.shape}")
-        #print(f"y.shape = {y.shape}")
-        #print(f"ycut.shape = {ycut.shape}")
-        #print(f"coding.shape = {coding.shape}")  # this is input to adversary
-        #print(f"dz_logits.shape = {dz_logits.shape}")
-        # CrossEntropyLoss expects (N, C) input and (N,) targets
-        #assert dz_logits.shape[0] == ycut.shape[0], "Batch size mismatch between adversary output and ycut"
-
-        #ycut = torch.argmax(ycut, dim=1)  # Ensure proper shape for CrossEntropyLoss
         loss_adv = criterion_adv(dz_logits, ycut)
 
         # Step 5: combined loss (gradient flows through classifier only from clf_loss)
@@ -577,50 +432,10 @@ for epoch in range(1, EPOCH+1):
         opt_adv.zero_grad()
         loss_adv.backward()
         opt_adv.step()
-        #TO KNOW HO WMANY EVENTS PROCESSED
-        #print(f"Epoch {epoch}: processed {samples_seen}/{MAX_EVENTS_PER_FILE} training samples")
-        # after fist epoch, snapshot ROC again
-        # if epoch == 1:
-        #     take_roc_snapshot('epoch1_end')
 
-    ##MY CODEEE: record epoch-level training loss
-    # avgTrain_loss_list.append(epoch_loss_sum/num_batches)
+    
     train_loss_list.append(epoch_loss_sum)
-
     validate_loss_list.append(calc_classifier_loss(val_loader))
-#"was added"
-    # — plot epoch 1 per batch train & val losses —  <<< ADDED
-# plt.figure()                                                         # <<< ADDED
-# plt.plot(train_batch_losses1, label='Train (epoch 1)')               # <<< ADDED
-# plt.plot(val_batch_losses1,   label='Val   (epoch 1)')               # <<< ADDED
-# plt.xlabel("Batch index")                                            # <<< ADDED
-# plt.ylabel("Loss")                                                   # <<< ADDED
-# plt.title("Epoch 1: Batch training & validation loss")               # <<< ADDED
-# plt.legend()                                                         # <<< ADDED
-# plt.tight_layout()                                                  # <<< ADDED
-# plt.savefig("epoch1_train_val_loss_per_batch.png")                    # <<< ADDED
-# plt.close()
-
-    # — plot epoch 2 per batch train & val losses —  <<< ADDED
-# plt.figure()                                                         # <<< ADDED
-# plt.plot(train_batch_losses2, label='Train (epoch 2)')               # <<< ADDED
-# plt.plot(val_batch_losses2,   label='Val   (epoch 2)')               # <<< ADDED
-# plt.xlabel("Batch index")                                            # <<< ADDED
-# plt.ylabel("Loss")                                                   # <<< ADDED
-# plt.title("Epoch 2: Batch training & validation loss")               # <<< ADDED
-# plt.legend()                                                         # <<< ADDED
-# plt.tight_layout()                                                   # <<< ADDED
-# plt.savefig("epoch2_train_val_loss_per_batch.png")                    # <<< ADDED
-# plt.close()
-"""????
-"""
-
-# plt.figure()
-# plt.plot(range(1, EPOCH+1), train_loss_list, marker='o')
-# plt.xlabel("Epoch")
-# plt.ylabel("loss_clf Sum")
-# plt.title("Training loss/Epoch")
-# plt.savefig("SUM_EPOCH_LOSS PER EPOCH.png")
 
 
 plt.figure()
@@ -632,29 +447,6 @@ plt.ylabel("Loss")
 plt.title("Training and Validation Loss/Epoch")
 plt.legend()
 plt.savefig(f"{args.output_dir}/TOTAL_TRAINING_AND_VALIDATION_LOSS_PER_EPOCH.png")
-
-##MY CODEEEEE
-# plt.figure()
-# for stage, label_text in [('epoch0_pretrain','Epoch 0 (pre-train)'),
-#                           ('epoch1_end','Epoch 1 (end)')]:
-#     if stage in roc_snaps:
-#         y_t, y_s = roc_snaps[stage]
-#         fpr, tpr, _ = roc_curve(y_t, y_s)
-#         roc_auc = auc(fpr, tpr)
-#         plt.plot(fpr, tpr, label=f"{label_text} AUC={roc_auc:.2f}")
-# plt.plot([0,1],[0,1],'k--',label='Random')
-# plt.xlabel('False Positive Rate')
-# plt.ylabel('True Positive Rate')
-# plt.title('ROC Progress: Epoch 0 → Epoch 1')
-# plt.legend()
-# plt.savefig("ROC_epoch0_epoch1_progress.png")
-# plt.close()
-
-#############IT IS AT THIS POINT THE ENTIRE CODE IS DIRECTED TOWARDS PLOTTING####################
-#########THIS SECTION OF CODE AIMS TO GET THE CLASSIFIER PERFORMANCE ON THE TEST DATA, IN TESTLOADER##########
-## runs the test set through the classifier, converts logits to probabilities with a sigmoid,
-## builds and saves ROC curve (receiver-operating characteristic), AUC (area under ROC), significance curve (signal efficiency divided by
-## sqrt of background efficiency)
 
 def calculate_predictions(data_loader):
     y_true_signal = []
@@ -677,60 +469,6 @@ def calculate_predictions(data_loader):
 
     return y_true_signal, y_pred_signal, y_true_region, y_pred_region_logits
 
-#####This section of code plots the adversarial ROC curves; I will refer to it as adversarry#############
-# unique, counts = np.unique(y_true_signal, return_counts=True)
-# print(dict(zip(unique, counts)))
-
-# y_true_region = np.array(y_true_region)
-# y_pred_region_logits = np.array(y_pred_region_logits)
-# n_bins = y_pred_region_logits.shape[1]
-
-# unique, counts = np.unique(y_true_region, return_counts=True)
-# print(dict(zip(unique, counts)))
-
-# Binarize true labels for one-vs-rest
-## measures how well each adversial bin classifer can tell "this event is in bin i vs. not bin i."
-## saves a 5-line ROC plot, one for each bin
-# y_true_bin = label_binarize(y_true_region, classes=list(range(n_bins)))
-
-# for i in range(n_bins):
-#     fpr, tpr, _ = roc_curve(y_true_bin[:, i], y_pred_region_logits[:, i])
-
-#     try:
-#         roc_auc = auc(fpr, tpr)
-#         plt.plot(fpr, tpr, label=f"Class {i} (AUC = {roc_auc:.2f})")
-#     except:
-#         print(f"Class {i} has insufficient samples for AUC")
-# plt.plot([0, 1], [0, 1], linestyle='--', color='gray')
-# plt.xlabel("FPR")
-# plt.ylabel("TPR")
-# plt.title("Adversary ROC (multi-class psum)")
-# plt.legend()
-# plt.grid(True)
-# plt.tight_layout()
-# plt.savefig("Adversary_ROC_MulticlassTestNoMassDiscrFarZ.png")
-
-##MY CODEEE
-# for idx, name in enumerate(flattened_names):
-#     print(idx, name)
-
-# #TO PRINT PER BIN EVENT COUNT, OVERFLOW AND UNDERFLOW !!!
-#     train_vals = (X_train[Y_train == 1, idx], #signal train
-#                 X_train[Y_train == 0, idx]) #bkg train
-#     test_vals = (X_test [Y_test == 1, idx],   #signal test
-#                X_test[Y_test == 0, idx])    #bkg test
-#     # 1) collect *all* values for this feature to choose common bin edges
-#     all_vals = np.concatenate([train_vals[0], train_vals[1], test_vals[0], test_vals[1]])
-
-#     # 2) pick bin edges (50 bins here; change if you want)
-#     edges = np.linspace(all_vals.min(), all_vals.max(), 51)
-
-#     # 3) print stats
-#     print(f"\n==== {name} ====")
-#     print_bin_stats(train_vals[0], edges, "train_sig")
-#     print_bin_stats(train_vals[1], edges, "train_bkg")
-#     print_bin_stats(test_vals[0],  edges, "test_sig")
-#     print_bin_stats(test_vals[1],  edges, "test_bkg")
 
 pz_col = 12
 
@@ -783,7 +521,6 @@ plt.ylabel('Density')
 plt.savefig("YUJINAS FIRST TASK TEST - Signal vs Background.png")
 plt.close()
 
-##MY CODEEEEE
 print("Total events :", X.shape[0])
 for idx, name in enumerate(flattened_names):
   train_vals = X_train[Y_train == 1, idx], X_train[Y_train == 0, idx] #mask and then idx means column for feature element (matrix composition: rows - event # (?), columns - feature/types like ele.pos, ele.pz)
@@ -812,7 +549,6 @@ for idx, name in enumerate(flattened_names):
   fig.savefig(f"Z(TO KEEP IT IN ONE PLACE): {safe_name}.png")
   plt.close()
 
-## MY CODEEEEE ^^^^
 ############THIS PLOTS THE ROC CURVE################
 def plot_roc(y_true, y_score, title):
     fpr, tpr, _ = roc_curve(y_true, y_score)
@@ -831,6 +567,7 @@ def plot_roc(y_true, y_score, title):
         plt.savefig(helper)
     except ValueError:
         print("One of the ROC Cuves Failes")
+
 ############THIS PLOTS SIGNIFICANCE, OR THE NUMBER OF SIGNAL EVENTS OVER THE NUMBER OF BACKGROUND################
 def plot_sig(y_true, y_score, title):
     fpr, tpr, _ = roc_curve(y_true, y_score)
@@ -841,13 +578,6 @@ def plot_sig(y_true, y_score, title):
             return 0
         sig = [helper(fpr[i],tpr[i]) for i in range(len(tpr))]
         roc_auc = max(sig)
-        #I = min([i*(dig[i]==roc_auc) for i in range(len(dig))])
-        #FPR=fpr[I]
-        #TPR=fpr[I]
-        #sig = []
-        #for i in range(len(dig)):
-        #    if (dig[i]>0.01*roc_auc)and(fpr[i]>.001):
-        #        sig.append(dig[i])
         plt.figure()
         plt.plot(fpr, sig, lw=2, label=f'SIG = {roc_auc:.2f}')#, fpr = {FPR:.2f}, tpr =  {TPR:.2f}')
         plt.plot([0, 1], [0, 1], color='gray', linestyle='--')
@@ -920,46 +650,3 @@ plt.legend()
 plt.title('Logit Distribution Before Sigmoid')
 plt.grid(True)
 plt.savefig("SigmoidBingBongNoMassDiscrFarZ.png")
-
-
-
-
-
-
-"""????
-    #old one recent one
-    #RESUMED FOR PRINTING 30 VARIABLES TRAIN AND TEST DOWN: print("Epoch", epoch+1, "total loss=", round(epoch_loss_sum, 4))
-    ##for epoch 1 plot per-batch losses
-    if epoch == 1:
-        plt.figure()
-        plt.plot(train_batch_losses)
-        plt.xlabel("Training batch index")
-        plt.ylabel("Batch training loss")
-        plt.title("Epoch 1: Training Loss per Batch")
-        plt.savefig("epoch1_train_loss_per_batch.png")
-        plt.close()
-
-
-
-    ##---- Validation pass - no updates (change in gradient??) -----
-    val_batch_losses0 = []
-    validate_loss_sum = 0.0
-    num_val_batches = 0
-    classifier.eval()
-    with torch.no_grad():
-        for x_val, y_val, _ in test_loader:
-        # Step 1: forward through classifier
-            val_logits = classifier(x_val)
-
-        # Step 2: classification loss
-            val_loss_clf = criterion_clf(val_logits, y_val.float())
-            val_batch_losses0.append(val_loss_clf.item())
-            validate_loss_sum += val_loss_clf.item()
-            num_val_batches += 1
-        classifier.train()
-
-        avg_val = validate_loss_sum / num_val_batches
-        avgValidate_loss_list.append(avg_val)
-
-    classifier.train() #new edit: back to training mode
-"""
