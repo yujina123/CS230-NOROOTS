@@ -7,7 +7,7 @@ import torch
 from torch.utils.data import TensorDataset, DataLoader
 from torch.autograd import Function
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, roc_curve, auc
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import argparse
@@ -18,7 +18,7 @@ np.random.seed(seed)
 random.seed(seed)
 torch.manual_seed(seed) 
 
-##YB for recognizing overflow, underflow
+##for recognizing overflow, underflow
 def print_bin_stats(values, edges, tag):
     """
     values: 1D numpy array of numbers (your feature values)
@@ -38,9 +38,9 @@ def print_bin_stats(values, edges, tag):
     return counts, under, over
 
 #########SETS THE NUMBER OF ADVERSARIAL CLASSES
-nbins=2 ##YB how many categories adversary network tries to predict  #ADV-ED COMMENTED OUT CHANGED FROM 5 TO 2
+nbins=2
 
-##YB reads command-line flag --epochs or -e to set how many passes through the data to make during training
+##reads command-line flag --epochs or -e to set how many passes through the data to make during training
 parser = argparse.ArgumentParser(description="describe epoch numbers plot")
 parser.add_argument("--epochs", "-e", type=int, default=5, help="Number of training epochs")
 parser.add_argument("--hidden_dims", nargs="*", help="Hidden layers dimensions", type=int, default=[])
@@ -53,13 +53,13 @@ EPOCH=args.epochs
 if not os.path.exists(args.output_dir):
     os.makedirs(args.output_dir)
 
-##YB Gradient Reversal Layer
+##Gradient Reversal Layer
 class GradReverse(Function):
     @staticmethod
     def forward(ctx, x, lambda_):
         ctx.lambda_ = lambda_
         return x.view_as(x)
-    ##YB in backward pass multiply all gradients by -lambda, classifier pushes features that fool the adversary
+    ##in backward pass multiply all gradients by -lambda, classifier pushes features that fool the adversary
     @staticmethod
     def backward(ctx, grad_output):
         return -ctx.lambda_ * grad_output, None
@@ -69,9 +69,9 @@ def grad_reverse(x, lambda_=1.0):
 
 
 ####MAIN NEURAL NETWORK FOR CLASSIFICATION
-##YB input layer: take input_dim features per event
-##YB hidden layer: 64 neurons with a ReLu activation - give non linearity
-##YB output layer: a logit per event -> prob of signal vs bkg
+##input layer: take input_dim features per event
+##hidden layer: 64 neurons with a ReLu activation - give non linearity
+##output layer: a logit per event -> prob of signal vs bkg
 
 #TO DO: get classifier object to extract hidden layer info, keep its ability to more than one hidden layer, i want certain dim and extract their nodes
 #TO DO: want the number associated than the matrix, output after eval number itself extract
@@ -103,15 +103,15 @@ class Classifier(torch.nn.Module):
         return out, coding                               # return both
 
 ######OTHER NEURAL NETWORK FOR ADVERSARIAL TASK
-##YB takes as input the classifier's internal representation - raw logit after applying gradient reversal
-##YB passes it through a small network (32-unit hiddent layer) and outputs nbins scores
-##YB nbins scores correspond to your 5 bins (the "adversarial" task of predicting which psum-range bin an event falls into)
+##takes as input the classifier's internal representation - raw logit after applying gradient reversal
+##passes it through a small network (32-unit hiddent layer) and outputs nbins scores
+##nbins scores correspond to your 5 bins (the "adversarial" task of predicting which psum-range bin an event falls into)
 
-## YB longer explaination: For each event, classifier produces a single number called a logit - unsquashed "confidence" score for signal vs. background.
-## YB We take that logit, wrap it in a tiny vector, and feed it to adversary network. Before adversary's layers see data,
-## YB pass it thru gradient reversal operation. In the forward direction, gradient reversal is the identity function - return logit
-## YB unchanged. The adversary processes that logit through 32-neuron hidden layer + ReLu and a 5-neuron output layer.
-## YB The five numbers are raw score (one per bin) that the adversary will use to predict which of the five psum ranges the original event came from.
+## longer explaination: For each event, classifier produces a single number called a logit - unsquashed "confidence" score for signal vs. background.
+## We take that logit, wrap it in a tiny vector, and feed it to adversary network. Before adversary's layers see data,
+## pass it thru gradient reversal operation. In the forward direction, gradient reversal is the identity function - return logit
+## unchanged. The adversary processes that logit through 32-neuron hidden layer + ReLu and a 5-neuron output layer.
+## The five numbers are raw score (one per bin) that the adversary will use to predict which of the five psum ranges the original event came from.
 
 class Adversary(torch.nn.Module):
     def __init__(self, input_dim):
@@ -127,8 +127,8 @@ class Adversary(torch.nn.Module):
         x = grad_reverse(x, lambda_)
         return self.net(x)
 
-## YB specifies which physics variables to pull from two ROOT files (one 0 and another 1)
-## YB prepares empty lists to accumulate your features, signal/background labels, and adversary-bin labels
+## specifies which physics variables to pull from two ROOT files (one 0 and another 1)
+## prepares empty lists to accumulate your features, signal/background labels, and adversary-bin labels
 
 # Only load specific branches
 #############THIS CONTAINS ALL THE BRANCHES OF THE ROOT FILE WE AIM TO USE; ADD MORE NAMES AS YOU SEE FIT (OR REMOVE)#############
@@ -157,16 +157,16 @@ cut_labels = []
 flattened_names = []  # to be populated once from first file
 
 
-## YB opens each file's preselection TTree, reads only the desired branches into memory, applies a mask,
-## YB flattens each branch into a single 2D feature array, labels each event as signal (1) or background (0)
-## YB divides the chosen variable (psum) range into 5 equal bins and assigns each event a bin index from 0 to 4.
-## YB accumulates all data, labels, and bin-labels
+## opens each file's preselection TTree, reads only the desired branches into memory, applies a mask,
+## flattens each branch into a single 2D feature array, labels each event as signal (1) or background (0)
+## divides the chosen variable (psum) range into 5 equal bins and assigns each event a bin index from 0 to 4.
+## accumulates all data, labels, and bin-labels
 
-###YB for smaller mass
+###for smaller mass
 ### when fills up to 10,000 events move on to next file
 #################THIS LOADS IN ALL THE EVENTS FROM THE SIGNAL AND BACKGROUND FILE WITH A MASK IF YOU WANT DISPLACED VERTICES#############
 for filename, label in files_and_labels:
-    #YB TO SKIP 10K EVENTS event_count = 0
+    #TO SKIP 10K EVENTS event_count = 0
     with uproot.open(f"{filename}:preselection") as tree:
         #print(tree.keys())
         arrays = tree.arrays(branches)
@@ -243,9 +243,9 @@ for filename, label in files_and_labels:
 ###########THIS IS THE MEAT OF THE CODE, THE PORTION DOING TRAINING. FIRST WE MUST STAGE THE DATA A BIT#############
 
 # Combine everything
-## YB concatenates all events into single feature matrix X, signal label vector Y, and bin label vector Z.
-## YB splits into training (70%) and testing (30%), making sure the fraction of signal vs. background stays the same in both sets.
-## YB wraps them in PyTorch DataLoaders so you can iterate in minibatches of 128 events.
+## concatenates all events into single feature matrix X, signal label vector Y, and bin label vector Z.
+## splits into training (70%) and testing (30%), making sure the fraction of signal vs. background stays the same in both sets.
+## wraps them in PyTorch DataLoaders so you can iterate in minibatches of 128 events.
 X = np.concatenate(all_data)
 Y = np.concatenate(all_labels)
 Z = np.concatenate(cut_labels)
@@ -284,12 +284,12 @@ test_dataset = TensorDataset(torch.tensor(X_test, dtype=torch.float32),
 test_loader = DataLoader(test_dataset, batch_size=128, drop_last=True)
 
 ##########WE NOW ESTABLISH THE CLASSIFIER AND ADVERSARY NETWORKS
-## YB creates the two networks, sets up Adam optimizers for both.
-## YB Chooses loss functions: Binary cross-entropy with logits for the classifier (signal vs background)
-## YB                     and Cross-entropy for the adversary (multi-class psum bin classification),
-## YB assigns a mixing weight = 50 to control how strongly the adversary affects training.
+## creates the two networks, sets up Adam optimizers for both.
+## Chooses loss functions: Binary cross-entropy with logits for the classifier (signal vs background)
+##                     and Cross-entropy for the adversary (multi-class psum bin classification),
+## assigns a mixing weight = 50 to control how strongly the adversary affects training.
 classifier = Classifier(input_dim=X.shape[1], hidden_dims=args.hidden_dims, dropout=args.dropout, activation=args.activation)
-##YB TO DO: Change the number of dimensions
+##TO DO: Change the number of dimensions
 #changed from 1 to 5
 adversary = Adversary(input_dim=X.shape[1] if len(args.hidden_dims) == 0 else args.hidden_dims[-1])  # match classifier output logits
 
@@ -304,10 +304,10 @@ criterion_adv = torch.nn.CrossEntropyLoss()
 lambda_adv = 0#set this to 1 (BETTER ROC curves but leakages, if high better leakage cover but worse performance - to make both of them good, we add more layers of classifier as inputs to the adversary) INITIALLY WAS 50
 #leakage: force neural network to invariant with respect to whatever the adversary is killing: rn mass, more leakage = classifier using mass to classify/predict
 
-##YB ROC CURVE FOR EPOCH 0 - EPOCH 1
+##ROC CURVE FOR EPOCH 0 - EPOCH 1
 roc_snaps = {}
 
-##YB helper functions to get true labels and scores on the test dataset
+##helper functions to get true labels and scores on the test dataset
 def get_scores(data_loader):
     """Run the classifier on the test set and return:
     - y_true array: the actual labels (0 or 1 - signal or background)
@@ -342,7 +342,7 @@ def get_scores(data_loader):
     y_score = np.concatenate(y_score_chunks)
     return y_true, y_score
 
-##YB helper function to take a snapshot
+##helper function to take a snapshot
 def take_roc_snapshot(stage_name, data_loader):
     """Compute test-set scores and store them in the global
        roc_snaps dict under the given key"""
@@ -350,20 +350,20 @@ def take_roc_snapshot(stage_name, data_loader):
     roc_snaps[stage_name] = (y_true, y_score)
 
 ##########WE NOW TRAIN OVER THE SAME TRAINING SET epoch MANY TIMES TO GET STABLE PERFORMANCE
-## YB forward pass through classifier to get a logit per event, compute classification loss
-## YB comparing to the true signal/background label, freeze the classifier (using .detach()) and pass
-## YB its output through the adversary - applying gradient reversal internally, compute adversary loss on the
-## YB true bin labels, train the classifier to both minimize its own loss and (because of gradient reversal)
-## YB make the adversary's job harder, train the adversary to get better at its bin-classification task.
+## forward pass through classifier to get a logit per event, compute classification loss
+## comparing to the true signal/background label, freeze the classifier (using .detach()) and pass
+## its output through the adversary - applying gradient reversal internally, compute adversary loss on the
+## true bin labels, train the classifier to both minimize its own loss and (because of gradient reversal)
+## make the adversary's job harder, train the adversary to get better at its bin-classification task.
 
 
-##YB prepare lists to record loss values over epochs
+##prepare lists to record loss values over epochs
 train_loss_list = [] #total training loss per epoch
 validate_loss_list = []
 # avgTrain_loss_list = [] #average training loss per epoch
 # avgValidate_loss_list = [] #average validation loss per epoch
 
-## YB EPOCH 0 baseline (no training/no weight updates)
+## EPOCH 0 baseline (no training/no weight updates)
 classifier.eval() #evaluation mode - no weight changes
 
 # training data baseline loss
@@ -397,7 +397,7 @@ adversary.to(device)
 classifier.train()
 #to debug
 adversary.train()
-##YB FOR VALIDATION LOSS:
+##FOR VALIDATION LOSS:
 # (2) Collect per‑batch losses at epoch 0  ← ADDED
 # train_batch_losses0 = []
 # with torch.no_grad():
@@ -452,14 +452,14 @@ print("Total events :", X.shape[0])
 MAX_EVENTS_PER_FILE = 10000
 for epoch in range(1, EPOCH+1):
     print('epoch:', epoch)
-    #YB --------TRAINING & VALIDATION PASS ----------#
+    #--------TRAINING & VALIDATION PASS ----------#
     epoch_loss_sum = num_batches = 0
     validate_loss_sum = num_val_batches = 0
     # validate_loss1_sum = num_val1_batches = 0
     # validate_loss2_sum = num_val2_batches = 0
-    #YB NEWW FOR 10K EVENTS
+    #NEWW FOR 10K EVENTS
     samples_seen = 0
-    ##YB grecord individual batch losses on epoch 1
+    ##grecord individual batch losses on epoch 1
     # if epoch == 1:
     #     train_batch_losses1 = []
     #     val_batch_losses1 = []                                               # <<< ADDED
@@ -470,7 +470,7 @@ for epoch in range(1, EPOCH+1):
     #halfway_batch_index = num_train_batches_total // 2
 
 
-    ##YB MY CODE
+    ##MY CODE
     #make a counter until 10 k and exit
     for x, y, ycut in train_loader:  #have to do enumerate for mid roc skipped
         #TO DEBUG THE SIZE MISMATCH
@@ -512,7 +512,7 @@ for epoch in range(1, EPOCH+1):
         # Step 2: classification loss
         loss_clf = criterion_clf(logits, y.float())
 
-        # YB MY CODEEE: recod if in first epoch
+        # MY CODEEE: recod if in first epoch
         # if epoch == 1:
         #     train_batch_losses1.append(loss_clf.item())
         #Test loader for loop happens, maybe you sum
@@ -543,7 +543,7 @@ for epoch in range(1, EPOCH+1):
         epoch_loss_sum += loss_clf.item()
         num_batches += 1
         samples_seen += batch_size
-        ## YB MY CODEEE
+        ## MY CODEEE
 
         # Step 3: adversarial prediction (on logits or softmax)
         adv_input = coding.detach() #ADV-ED COMMENTED OUT adv_input = logits.detach().unsqueeze(1)  # optionally softmax(logits) if more stable
@@ -583,7 +583,7 @@ for epoch in range(1, EPOCH+1):
         # if epoch == 1:
         #     take_roc_snapshot('epoch1_end')
 
-    ##YB MY CODEEE: record epoch-level training loss
+    ##MY CODEEE: record epoch-level training loss
     # avgTrain_loss_list.append(epoch_loss_sum/num_batches)
     train_loss_list.append(epoch_loss_sum)
 
@@ -633,7 +633,7 @@ plt.title("Training and Validation Loss/Epoch")
 plt.legend()
 plt.savefig(f"{args.output_dir}/TOTAL_TRAINING_AND_VALIDATION_LOSS_PER_EPOCH.png")
 
-##YB MY CODEEEEE
+##MY CODEEEEE
 # plt.figure()
 # for stage, label_text in [('epoch0_pretrain','Epoch 0 (pre-train)'),
 #                           ('epoch1_end','Epoch 1 (end)')]:
@@ -652,9 +652,9 @@ plt.savefig(f"{args.output_dir}/TOTAL_TRAINING_AND_VALIDATION_LOSS_PER_EPOCH.png
 
 #############IT IS AT THIS POINT THE ENTIRE CODE IS DIRECTED TOWARDS PLOTTING####################
 #########THIS SECTION OF CODE AIMS TO GET THE CLASSIFIER PERFORMANCE ON THE TEST DATA, IN TESTLOADER##########
-## YB runs the test set through the classifier, converts logits to probabilities with a sigmoid,
-## YB builds and saves ROC curve (receiver-operating characteristic), AUC (area under ROC), significance curve (signal efficiency divided by
-## YB sqrt of background efficiency)
+## runs the test set through the classifier, converts logits to probabilities with a sigmoid,
+## builds and saves ROC curve (receiver-operating characteristic), AUC (area under ROC), significance curve (signal efficiency divided by
+## sqrt of background efficiency)
 
 def calculate_predictions(data_loader):
     y_true_signal = []
@@ -689,8 +689,8 @@ def calculate_predictions(data_loader):
 # print(dict(zip(unique, counts)))
 
 # Binarize true labels for one-vs-rest
-## YB measures how well each adversial bin classifer can tell "this event is in bin i vs. not bin i."
-## YB saves a 5-line ROC plot, one for each bin
+## measures how well each adversial bin classifer can tell "this event is in bin i vs. not bin i."
+## saves a 5-line ROC plot, one for each bin
 # y_true_bin = label_binarize(y_true_region, classes=list(range(n_bins)))
 
 # for i in range(n_bins):
@@ -710,7 +710,7 @@ def calculate_predictions(data_loader):
 # plt.tight_layout()
 # plt.savefig("Adversary_ROC_MulticlassTestNoMassDiscrFarZ.png")
 
-##YB MY CODEEE
+##MY CODEEE
 # for idx, name in enumerate(flattened_names):
 #     print(idx, name)
 
@@ -757,7 +757,7 @@ plt.xlabel('ele.track_.pz_ (GeV/c)')
 plt.ylabel('Density')
 plt.savefig("YUJINAS FIRST TASK TRAIN- Signal vs Background.png")
 plt.close()
-#### YB TEST
+#### TEST
 
 signal_mask_test = (Y_test == 1)
 bkg_mask_test = (Y_test == 0)
@@ -783,7 +783,7 @@ plt.ylabel('Density')
 plt.savefig("YUJINAS FIRST TASK TEST - Signal vs Background.png")
 plt.close()
 
-##YB MY CODEEEEE
+##MY CODEEEEE
 print("Total events :", X.shape[0])
 for idx, name in enumerate(flattened_names):
   train_vals = X_train[Y_train == 1, idx], X_train[Y_train == 0, idx] #mask and then idx means column for feature element (matrix composition: rows - event # (?), columns - feature/types like ele.pos, ele.pz)
@@ -812,7 +812,7 @@ for idx, name in enumerate(flattened_names):
   fig.savefig(f"Z(TO KEEP IT IN ONE PLACE): {safe_name}.png")
   plt.close()
 
-## YB MY CODEEEEE ^^^^
+## MY CODEEEEE ^^^^
 ############THIS PLOTS THE ROC CURVE################
 def plot_roc(y_true, y_score, title):
     fpr, tpr, _ = roc_curve(y_true, y_score)
@@ -876,6 +876,20 @@ plot_roc(y_true_signal_train, y_pred_signal_train, f"{args.output_dir}/Classifie
 y_true_signal_test, y_pred_signal_test, _, _ = calculate_predictions(test_loader)
 plot_roc(y_true_signal_test, y_pred_signal_test, f"{args.output_dir}/Classifier_ROC_Signal_vs_Background_Test")
 
+y_pred_test = (np.array(y_pred_signal_test) > 0.5).astype(int)
+cm = confusion_matrix(y_true_signal_test, y_pred_test)
+
+print("Confusion Matrix:")
+print(cm)
+
+# Calculate accuracy
+accuracy = accuracy_score(y_true_signal_test, y_pred_test)
+print(f"Accuracy: {accuracy}")
+
+# Calculate precision
+precision = precision_score(y_true_signal_test, y_pred_test)
+print(f"Precision: {precision}")
+
 
 logits_signal = []
 logits_background = []
@@ -897,7 +911,7 @@ logits_background = np.array(logits_background)
 
 # Plot
 plt.clf()
-## YB visualizes how separable the pre-sigmoid outputs are for signal vs. background
+## visualizes how separable the pre-sigmoid outputs are for signal vs. background
 plt.hist(logits_signal, bins=50, alpha=0.5, label='Signal', density=True, histtype='step')
 plt.hist(logits_background, bins=50, alpha=0.5, label='Background', density=True, histtype='step')
 plt.xlabel('Classifier Output (Pre-Sigmoid Logit)')
@@ -913,7 +927,7 @@ plt.savefig("SigmoidBingBongNoMassDiscrFarZ.png")
 
 
 """????
-    #yb old one recent one
+    #old one recent one
     #RESUMED FOR PRINTING 30 VARIABLES TRAIN AND TEST DOWN: print("Epoch", epoch+1, "total loss=", round(epoch_loss_sum, 4))
     ##for epoch 1 plot per-batch losses
     if epoch == 1:
@@ -927,7 +941,7 @@ plt.savefig("SigmoidBingBongNoMassDiscrFarZ.png")
 
 
 
-    ##YB ---- Validation pass - no updates (change in gradient??) -----
+    ##---- Validation pass - no updates (change in gradient??) -----
     val_batch_losses0 = []
     validate_loss_sum = 0.0
     num_val_batches = 0
