@@ -45,6 +45,7 @@ parser = argparse.ArgumentParser(description="describe epoch numbers plot")
 parser.add_argument("--epochs", "-e", type=int, default=5, help="Number of training epochs")
 parser.add_argument("--hidden_dims", nargs="*", help="Hidden layers dimensions", type=int, default=[])
 parser.add_argument("--dropout", help="dropout", type=float, default=0.0)
+parser.add_argument("--activation", default='relu')
 parser.add_argument("--output_dir", required=True)
 args = parser.parse_args()
 EPOCH=args.epochs
@@ -76,7 +77,7 @@ def grad_reverse(x, lambda_=1.0):
 #TO DO: want the number associated than the matrix, output after eval number itself extract
 #TO DO: not care about weights with the matrices, actual calculation the node does, weight + inputs
 class Classifier(torch.nn.Module):
-    def __init__(self, input_dim, hidden_dims=[], dropout=0):
+    def __init__(self, input_dim, hidden_dims=[], dropout=0, activation='relu'):
         super().__init__()
 
         layers = []
@@ -87,7 +88,7 @@ class Classifier(torch.nn.Module):
                 layers.append(torch.nn.Dropout(p=dropout))
             layers += [
                 torch.nn.Linear(prev_dim, hidden_dim),
-                torch.nn.ReLU()
+                {'relu': torch.nn.ReLU(), 'leaky_relu': torch.nn.LeakyReLU(), 'tanh': torch.nn.Tanh(), 'sigmoid': torch.nn.Sigmoid()}[activation]
             ]
             prev_dim = hidden_dim
 
@@ -287,7 +288,7 @@ test_loader = DataLoader(test_dataset, batch_size=128, drop_last=True)
 ## YB Chooses loss functions: Binary cross-entropy with logits for the classifier (signal vs background)
 ## YB                     and Cross-entropy for the adversary (multi-class psum bin classification),
 ## YB assigns a mixing weight = 50 to control how strongly the adversary affects training.
-classifier = Classifier(input_dim=X.shape[1], hidden_dims=args.hidden_dims, dropout=args.dropout)
+classifier = Classifier(input_dim=X.shape[1], hidden_dims=args.hidden_dims, dropout=args.dropout, activation=args.activation)
 ##YB TO DO: Change the number of dimensions
 #changed from 1 to 5
 adversary = Adversary(input_dim=X.shape[1] if len(args.hidden_dims) == 0 else args.hidden_dims[-1])  # match classifier output logits
@@ -861,54 +862,11 @@ def plot_sig(y_true, y_score, title):
     except ValueError:
         print("One of the ROC Cuves Failes")
 
-#####THIS LINE PLOTS THE ROC FOR THE ACTUAL CLASSIFIER CLASS#############
+##### THIS PLOTS THE ROC CURVES FOR THE CLASSIFIER #############
 # Classifier ROC (signal vs background)
 y_true_signal_val, y_pred_signal_val, _, _ = calculate_predictions(val_loader)
 plot_roc(y_true_signal_val, y_pred_signal_val, f"{args.output_dir}/Classifier_ROC_Signal_vs_Background_Validation")
 # plot_sig(y_true_signal_val, y_pred_signal_vanl, "Classifier_SIG_Signal_vs_Background_Validation")
-
-
-
-#########THIS SECTION OF CODE AIMS TO GET THE CLASSIFIER PERFORMANCE ON THE TRAINING DATA, IN TESTLOADER; DOES ALL THE SAME STUFF AS BEFORE##########
-# y_true_signal = []
-# y_pred_signal = []
-
-# y_true_region = []
-# y_pred_region_logits = []
-
-# with torch.no_grad():
-#     for x_batch, y_signal, y_region in train_loader:
-#         logits_signal, coding = classifier(x_batch) #ADV-ED COMMENTED OUT ADDED FEATURE
-#         probs_signal = torch.sigmoid(logits_signal)
-#         logits_region = adversary(coding.detach(), lambda_=1.0)#logits_signal.unsqueeze(1)
-
-#         y_true_signal.extend(y_signal.numpy())
-#         y_pred_signal.extend(probs_signal.numpy())
-
-#         y_true_region.extend(y_region.numpy())
-#         y_pred_region_logits.extend(logits_region.numpy())  # shape: (B, n_bins)
-
-# y_true_region = np.array(y_true_region)
-# y_pred_region_logits = np.array(y_pred_region_logits)
-# n_bins = y_pred_region_logits.shape[1]
-
-# # Binarize true labels for one-vs-rest
-# y_true_bin = label_binarize(y_true_region, classes=list(range(n_bins)))
-
-# for i in range(n_bins):
-#     fpr, tpr, _ = roc_curve(y_true_bin[:, i], y_pred_region_logits[:, i])
-#     roc_auc = auc(fpr, tpr)
-
-#     plt.plot(fpr, tpr, label=f"Class {i} (AUC = {roc_auc:.2f})")
-
-# plt.plot([0, 1], [0, 1], linestyle='--', color='gray')
-# plt.xlabel("FPR")
-# plt.ylabel("TPR")
-# plt.title("Adversary ROC (multi-class psum)")
-# plt.legend()
-# plt.grid(True)
-# plt.tight_layout()
-# plt.savefig("Adversary_ROC_MulticlassTrainNoMassDiscrFarZ.png")
 
 # Classifier ROC (signal vs background)
 y_true_signal_train, y_pred_signal_train, _, _ = calculate_predictions(train_loader)
