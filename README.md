@@ -19,7 +19,7 @@ Runs with 3 hidden layers of size 64, dropout value of 0.5.
 $ python dropout.py --hidden_dims 64 64 64 --dropout 0.5 --output_dir output/hidden_dims_64_64_64_dropout_0p5
 ```
 
-Runs with 1 hidden layers of size 64 and LeakyReLU activation
+Runs with 1 hidden layer of size 64 and LeakyReLU activation
 ```
 $ python dropout.py --hidden_dims 64 --activation leaky_relu --output_dir output/hidden_dims_64_leaky_relu
 ```
